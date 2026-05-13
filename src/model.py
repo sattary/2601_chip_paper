@@ -4,100 +4,83 @@ import torch.nn.functional as F
 from typing import Tuple
 
 
+class ResBlock(nn.Module):
+    def __init__(self, dim: int, dropout: float):
+        super().__init__()
+        self.fc1 = nn.Linear(dim, dim)
+        self.bn1 = nn.BatchNorm1d(dim)
+        self.fc2 = nn.Linear(dim, dim)
+        self.bn2 = nn.BatchNorm1d(dim)
+        self.drop = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        res = x
+        x = F.gelu(self.bn1(self.fc1(x)))
+        x = self.drop(x)
+        x = self.bn2(self.fc2(x))
+        x = x + res
+        return F.gelu(x)
+
+
 class HINN_MultiTask(nn.Module):
     """
     Hardware-Informed Neural Network (HINN).
 
-    Rationale:
-    Option A (Entity Embeddings): Instead of passing 262 flat, sparse OHE bits into
-    the trunk, we group the one-hot columns by their parent categorical parameter
-    (e.g., param_0, param_1) and pass each group through an nn.Linear projection.
-    Mathematically, nn.Linear applied to an OHE vector is identical to an
-    nn.Embedding lookup, but this allows us to use the existing data pipeline.
-    This creates a dense, semantically meaningful representation of HLS kernels
-    (e.g. FFT vs GEMM) before the compression bottleneck, boosting Area R2.
-
-    A shared backbone learns the joint representation of the HLS configuration.
-    Divergent heads predict Area and Latency separately.
+    Rationale (Option B - ResNet):
+    Entity Embeddings (Option A) gave the model too much capacity and destroyed the
+    ordinal relationship between parallelism factors, causing massive overfitting
+    when the physics constraint turned on.
+    Instead, we use a ResNet trunk. Skip connections allow the physics constraint 
+    gradients to flow directly to the earlier representations without destroying 
+    the data-fitting features, preventing R2 collapse.
     """
 
     def __init__(
         self,
         input_dim: int,
-        feature_names: list[str] | None = None,
-        embed_dim: int = 16,
-        hidden_dims: list[int] | None = None,
-        dropout: float = 0.1,
+        feature_names: list[str] | None = None,  # Ignored, kept for API compat
+        embed_dim: int = 16,                     # Ignored
+        hidden_dims: list[int] | None = None,    # Ignored, we use fixed ResNet dims
+        dropout: float = 0.2,
     ) -> None:
         super().__init__()
         
-        self.use_embeddings = feature_names is not None
-        
-        if self.use_embeddings:
-            from collections import defaultdict
-            self.param_groups = defaultdict(list)
-            for i, col in enumerate(feature_names):
-                parts = col.split('_')
-                if len(parts) >= 2 and parts[0] == 'param':
-                    group_name = f'param_{parts[1]}'
-                    self.param_groups[group_name].append(i)
-                else:
-                    self.param_groups['other'].append(i)
-            
-            self.embeddings = nn.ModuleDict()
-            trunk_input_dim = 0
-            for group_name, indices in self.param_groups.items():
-                group_dim = len(indices)
-                # Provide a reasonable embedding capacity for categorical variables
-                out_dim = min(embed_dim, group_dim) if group_dim > 1 else group_dim
-                self.embeddings[group_name] = nn.Linear(group_dim, out_dim)
-                trunk_input_dim += out_dim
-                self.register_buffer(f"idx_{group_name}", torch.tensor(indices, dtype=torch.long))
-        else:
-            trunk_input_dim = input_dim
+        hidden_dim = 256
+        num_blocks = 3
 
-        if hidden_dims is None:
-            hidden_dims = [512, 256, 128, 64]
+        # Initial projection to hidden dimension
+        self.input_proj = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout)
+        )
 
-        layers: list[nn.Module] = []
-        prev_dim = trunk_input_dim
-        for h_dim in hidden_dims:
-            layers.append(nn.Linear(prev_dim, h_dim))
-            layers.append(nn.GELU())
-            layers.append(nn.BatchNorm1d(h_dim))
-            layers.append(nn.Dropout(p=dropout))
-            prev_dim = h_dim
-
-        self.shared_trunk = nn.Sequential(*layers)
+        # ResNet Trunk
+        blocks = []
+        for _ in range(num_blocks):
+            blocks.append(ResBlock(hidden_dim, dropout))
+        self.shared_trunk = nn.Sequential(*blocks)
 
         # Area Head: predicts hls_lut (idx 0) and hls_ff (idx 1)
         self.area_head = nn.Sequential(
-            nn.Linear(hidden_dims[-1], 32),
+            nn.Linear(hidden_dim, 64),
             nn.GELU(),
-            nn.Linear(32, 2),
+            nn.BatchNorm1d(64),
+            nn.Linear(64, 2),
         )
 
         # Latency Head: predicts average_latency (idx 2) and best_latency (idx 3)
         self.latency_head = nn.Sequential(
-            nn.Linear(hidden_dims[-1], 32),
+            nn.Linear(hidden_dim, 64),
             nn.GELU(),
-            nn.Linear(32, 2),
+            nn.BatchNorm1d(64),
+            nn.Linear(64, 2),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.use_embeddings:
-            embedded_chunks = []
-            for group_name, linear_layer in self.embeddings.items():
-                idx = getattr(self, f"idx_{group_name}")
-                chunk = x[:, idx]
-                embedded = linear_layer(chunk)
-                embedded_chunks.append(embedded)
-            shared_input = torch.cat(embedded_chunks, dim=-1)
-            shared_input = F.gelu(shared_input)
-        else:
-            shared_input = x
-            
-        shared = self.shared_trunk(shared_input)
+        x = self.input_proj(x)
+        shared = self.shared_trunk(x)
         return torch.cat([self.area_head(shared), self.latency_head(shared)], dim=-1)
 
 
