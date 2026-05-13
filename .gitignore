@@ -12,7 +12,4 @@ wheels/
 
 # Data and Artifacts
 data/*.sql
-results/
-*.pt
-*.csv
 .ipynb_checkpoints/
