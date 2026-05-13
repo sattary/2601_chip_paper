@@ -38,6 +38,7 @@ def _load_model_and_scalers(
     model_path: str,
     scalers_dir: str,
     input_dim: int,
+    feature_names: list[str],
     device: torch.device,
 ) -> tuple[HINN_MultiTask, object, object, object, dict]:
     scalers_dir = Path(scalers_dir)
@@ -48,7 +49,7 @@ def _load_model_and_scalers(
     cfg_path = scalers_dir / "transform_config.pkl"
     transform_cfg: dict = joblib.load(cfg_path) if cfg_path.exists() else {}
 
-    model = HINN_MultiTask(input_dim=input_dim)
+    model = HINN_MultiTask(input_dim=input_dim, feature_names=feature_names)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     model.to(device)
@@ -136,7 +137,7 @@ def run_moo(
     targets_df = pd.read_parquet(targets_path)
 
     model, scaler_X, scaler_y_area, scaler_y_lat, transform_cfg = _load_model_and_scalers(
-        model_path, scalers_dir, input_dim=features_df.shape[1], device=device
+        model_path, scalers_dir, input_dim=features_df.shape[1], feature_names=list(features_df.columns), device=device
     )
     print(f"Loaded surrogate from {model_path}")
     print(f"  Transform config: {transform_cfg}")

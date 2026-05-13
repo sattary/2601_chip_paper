@@ -185,7 +185,10 @@ def train_hinn(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model = HINN_MultiTask(input_dim=X_train.shape[1]).to(device)
+    model = HINN_MultiTask(
+        input_dim=X_train.shape[1],
+        feature_names=list(X_train.columns),
+    ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
 
     # Cosine annealing: smooth LR decay from 1e-3 to 1e-5 over T_max epochs.

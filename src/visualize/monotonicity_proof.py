@@ -31,7 +31,7 @@ def plot_monotonicity(model_path: str, scalers_dir: str, features_path: str, out
     features_df = pd.read_parquet(features_path)
     input_dim = features_df.shape[1]
     
-    model = HINN_MultiTask(input_dim=input_dim)
+    model = HINN_MultiTask(input_dim=input_dim, feature_names=list(features_df.columns))
     model.load_state_dict(torch.load(model_path, map_location='cpu'))
     model.eval()
     

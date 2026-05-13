@@ -9,27 +9,58 @@ class HINN_MultiTask(nn.Module):
     Hardware-Informed Neural Network (HINN).
 
     Rationale:
+    Option A (Entity Embeddings): Instead of passing 262 flat, sparse OHE bits into
+    the trunk, we group the one-hot columns by their parent categorical parameter
+    (e.g., param_0, param_1) and pass each group through an nn.Linear projection.
+    Mathematically, nn.Linear applied to an OHE vector is identical to an
+    nn.Embedding lookup, but this allows us to use the existing data pipeline.
+    This creates a dense, semantically meaningful representation of HLS kernels
+    (e.g. FFT vs GEMM) before the compression bottleneck, boosting Area R2.
+
     A shared backbone learns the joint representation of the HLS configuration.
-    Divergent heads predict Area and Latency separately, forcing the network to
-    map the Pareto conflict internally. Dropout(0.1) prevents co-adaptation on
-    rare one-hot categories in the sparse 262-dim input. The 512-first-layer
-    avoids aggressive early compression of nearly-orthogonal OHE directions.
+    Divergent heads predict Area and Latency separately.
     """
 
     def __init__(
         self,
         input_dim: int,
+        feature_names: list[str] | None = None,
+        embed_dim: int = 16,
         hidden_dims: list[int] | None = None,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        
+        self.use_embeddings = feature_names is not None
+        
+        if self.use_embeddings:
+            from collections import defaultdict
+            self.param_groups = defaultdict(list)
+            for i, col in enumerate(feature_names):
+                parts = col.split('_')
+                if len(parts) >= 2 and parts[0] == 'param':
+                    group_name = f'param_{parts[1]}'
+                    self.param_groups[group_name].append(i)
+                else:
+                    self.param_groups['other'].append(i)
+            
+            self.embeddings = nn.ModuleDict()
+            trunk_input_dim = 0
+            for group_name, indices in self.param_groups.items():
+                group_dim = len(indices)
+                # Provide a reasonable embedding capacity for categorical variables
+                out_dim = min(embed_dim, group_dim) if group_dim > 1 else group_dim
+                self.embeddings[group_name] = nn.Linear(group_dim, out_dim)
+                trunk_input_dim += out_dim
+                self.register_buffer(f"idx_{group_name}", torch.tensor(indices, dtype=torch.long))
+        else:
+            trunk_input_dim = input_dim
+
         if hidden_dims is None:
-            # 512 entry gives the trunk room to disambiguate the ~262 OHE directions
-            # before the bottleneck compression sequence.
             hidden_dims = [512, 256, 128, 64]
 
         layers: list[nn.Module] = []
-        prev_dim = input_dim
+        prev_dim = trunk_input_dim
         for h_dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, h_dim))
             layers.append(nn.GELU())
@@ -54,7 +85,19 @@ class HINN_MultiTask(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        shared = self.shared_trunk(x)
+        if self.use_embeddings:
+            embedded_chunks = []
+            for group_name, linear_layer in self.embeddings.items():
+                idx = getattr(self, f"idx_{group_name}")
+                chunk = x[:, idx]
+                embedded = linear_layer(chunk)
+                embedded_chunks.append(embedded)
+            shared_input = torch.cat(embedded_chunks, dim=-1)
+            shared_input = F.gelu(shared_input)
+        else:
+            shared_input = x
+            
+        shared = self.shared_trunk(shared_input)
         return torch.cat([self.area_head(shared), self.latency_head(shared)], dim=-1)
 
 

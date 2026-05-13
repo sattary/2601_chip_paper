@@ -220,7 +220,10 @@ def train_vanilla_mlp(
     val_loader = _make_loader(X_v, y_v, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = HINN_MultiTask(input_dim=X_train.shape[1]).to(device)
+    model = HINN_MultiTask(
+        input_dim=X_train.shape[1],
+        feature_names=list(X_train.columns),
+    ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=epochs, eta_min=1e-5
