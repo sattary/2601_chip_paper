@@ -11,7 +11,7 @@ wheels/
 .env
 
 # Data and Artifacts
-data/
+data/*.sql
 results/
 *.parquet
 *.pt
