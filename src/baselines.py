@@ -126,7 +126,7 @@ def train_xgboost(
     # XGBoost handles raw features well; we still apply log1p to targets for
     # consistency — it dramatically reduces RMSE on the skewed targets.
     X_tr, y_tr = _transform(X_train, y_train, scaler_X, scaler_y_area, scaler_y_lat)
-    _, y_val_t = _transform(X_val, y_val, scaler_X, scaler_y_area, scaler_y_lat)
+    X_v, y_val_t = _transform(X_val, y_val, scaler_X, scaler_y_area, scaler_y_lat)
     X_te, y_te = _transform(X_test, y_test, scaler_X, scaler_y_area, scaler_y_lat)
 
     base = XGBRegressor(
@@ -160,7 +160,7 @@ def train_xgboost(
             early_stopping_rounds=20,
         )
         m.fit(X_tr, y_tr[:, i], eval_set=[(X_te, y_te[:, i])], verbose=False)
-        val_r2_list.append(r2_score(y_val_t[:, i], m.predict(X_tr)))
+        val_r2_list.append(r2_score(y_val_t[:, i], m.predict(X_v)))
         models.append(m)
 
     # Evaluate on test set
