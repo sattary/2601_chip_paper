@@ -178,8 +178,9 @@ def train_hinn(
     # Datasets and loaders
     train_dataset = HINNDataset(X_train_scaled, y_train_scaled, parallelism_prefix="param_3_")
     val_dataset = HINNDataset(X_val_scaled, y_val_scaled, parallelism_prefix="param_3_")
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
+    pin_mem = torch.cuda.is_available()
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_mem)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=pin_mem)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")

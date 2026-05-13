@@ -213,7 +213,8 @@ def train_vanilla_mlp(
             torch.tensor(X, dtype=torch.float32),
             torch.tensor(y, dtype=torch.float32),
         )
-        return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, pin_memory=True)
+        pin_mem = torch.cuda.is_available()
+        return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, pin_memory=pin_mem)
 
     train_loader = _make_loader(X_tr, y_tr, shuffle=True)
     val_loader = _make_loader(X_v, y_v, shuffle=False)
