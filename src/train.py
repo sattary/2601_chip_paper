@@ -77,8 +77,11 @@ def train_hinn(epochs: int = 200, batch_size: int = 32):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using hardware accelerator: {device}")
+    
     # Model Setup
-    model = HINN_MultiTask(input_dim=X_train.shape[1])
+    model = HINN_MultiTask(input_dim=X_train.shape[1]).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     
     best_val_loss = float('inf')
@@ -100,6 +103,7 @@ def train_hinn(epochs: int = 200, batch_size: int = 32):
         model.train()
         train_mse_total = 0
         for x, x_pert, y in train_loader:
+            x, x_pert, y = x.to(device), x_pert.to(device), y.to(device)
             optimizer.zero_grad()
             preds = model(x)
             preds_pert = model(x_pert)
@@ -125,6 +129,7 @@ def train_hinn(epochs: int = 200, batch_size: int = 32):
         
         with torch.no_grad():
             for x, x_pert, y in val_loader:
+                x, x_pert, y = x.to(device), x_pert.to(device), y.to(device)
                 preds = model(x)
                 preds_pert = model(x_pert)
                 
@@ -133,8 +138,8 @@ def train_hinn(epochs: int = 200, batch_size: int = 32):
                 
                 cvr_total += calculate_cvr(preds, preds_pert) * x.size(0)
                 
-                all_preds.append(preds.numpy())
-                all_y.append(y.numpy())
+                all_preds.append(preds.cpu().numpy())
+                all_y.append(y.cpu().numpy())
                 
         val_mse = val_mse_total / len(val_dataset)
         val_cvr = cvr_total / len(val_dataset)
