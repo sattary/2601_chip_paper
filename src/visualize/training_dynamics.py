@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path as _VizPath
+sys.path.insert(0, str(_VizPath(__file__).parent))
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt

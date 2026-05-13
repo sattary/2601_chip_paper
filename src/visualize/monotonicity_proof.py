@@ -14,9 +14,18 @@ from style import nature_style, save_figure, SINGLE_COL
 
 def plot_monotonicity(model_path: str, scalers_dir: str, features_path: str, out_path: str):
     # Load Scalers
-    scaler_X = joblib.load(Path(scalers_dir) / 'scaler_X.pkl')
-    scaler_y_area = joblib.load(Path(scalers_dir) / 'scaler_y_area.pkl')
-    scaler_y_lat = joblib.load(Path(scalers_dir) / 'scaler_y_lat.pkl')
+    scalers_dir = Path(scalers_dir)
+    scaler_X = joblib.load(scalers_dir / 'scaler_X.pkl')
+    scaler_y_area = joblib.load(scalers_dir / 'scaler_y_area.pkl')
+    scaler_y_lat = joblib.load(scalers_dir / 'scaler_y_lat.pkl')
+
+    # Recover whether log1p was applied to latency during training.
+    # Symmetry is non-negotiable: inference must mirror the training transform pipeline.
+    transform_cfg_path = scalers_dir / 'transform_config.pkl'
+    lat_log1p = False
+    if transform_cfg_path.exists():
+        cfg = joblib.load(transform_cfg_path)
+        lat_log1p = cfg.get('lat_log1p_applied', False)
     
     # Load Model
     features_df = pd.read_parquet(features_path)
@@ -61,10 +70,11 @@ def plot_monotonicity(model_path: str, scalers_dir: str, features_path: str, out
             # Predict
             preds_scaled = model(x_tensor).numpy()
             
-            # Inverse Transform
+            # Inverse Transform: reverse StandardScaler, then reverse log1p if applied.
             area_pred = scaler_y_area.inverse_transform(preds_scaled[:, :2])
-            lat_pred = scaler_y_lat.inverse_transform(preds_scaled[:, 2:])
-            
+            lat_pred_scaled = scaler_y_lat.inverse_transform(preds_scaled[:, 2:])
+            lat_pred = np.expm1(lat_pred_scaled) if lat_log1p else lat_pred_scaled
+
             # Sum LUT and FF for total area, use average latency
             total_area = area_pred[0, 0] + area_pred[0, 1]
             avg_lat = lat_pred[0, 0]
