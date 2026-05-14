@@ -180,19 +180,42 @@ def plot_empirical_mono_cmd(
     plot_empirical_monotonicity(audit, out)
 
 
+@PlotApp.command("speedup")
+def plot_speedup_cmd(
+    out: str = typer.Option("results/figs/speedup_comparison", "--out"),
+) -> None:
+    """Plot Time-to-Pareto acceleration comparing Exhaustive HLS vs HINN."""
+    from visualize.speedup_comparison import plot_speedup_comparison
+    plot_speedup_comparison(out)
+
+
+@PlotApp.command("error-heatmap")
+def plot_error_heatmap_cmd(
+    model: str = typer.Option("results/models/hinn_best.pt", "--model"),
+    model_dir: str = typer.Option("results/models", "--model-dir"),
+    features: str = typer.Option("data/processed/features.parquet", "--features"),
+    targets: str = typer.Option("data/processed/targets.parquet", "--targets"),
+    out: str = typer.Option("results/figs/error_heatmap", "--out"),
+) -> None:
+    """Plot 2D hexbin of HINN prediction error across the true objective space."""
+    from visualize.error_heatmap import plot_error_heatmap
+    plot_error_heatmap(model, model_dir, features, targets, out)
+
+
 @PlotApp.command("all")
 def plot_all_cmd() -> None:
     """Generate all figures for the manuscript."""
     import subprocess
     print("Generating all paper plots...")
     
-    # We call these via subprocess to avoid typer exit codes blocking execution
     commands = [
+        "speedup",
         "data-distribution",
         "empirical-monotonicity",
         "training-dynamics",
         "comparison",
         "pareto",
+        "error-heatmap",
         "monotonicity"
     ]
     
