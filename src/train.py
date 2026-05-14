@@ -237,22 +237,30 @@ def train_hinn(
     with open(metrics_file, "w") as f:
         f.write("epoch,lr,lambda_weight,train_mse,val_mse,val_r2,val_cvr\n")
 
-    # Rationale for lambda_max=0.3: the monotonicity audit (Section 4.1) showed
-    # only 52% empirical compliance. With high-capacity embeddings, lambda=1.0
-    # forces the model to overfit a constraint that is false for ~48% of the data,
-    # destroying generalization (R2 drops from 0.81 to 0.70). lambda_max=0.3
-    # acts as a soft Bayesian prior, consistent with the paper's narrative.
-    LAMBDA_MAX = 0.3
+    # Rationale for phased lambda schedule:
+    # 1. 0-30: Warm-up (lambda=0) to establish basic mapping.
+    # 2. 30-100: Soft-ramp to 0.3 (soft Bayesian prior).
+    # 3. 100-300: Plateau at 0.3 to maximize R2 performance.
+    # 4. 300-500: Hard-ramp to 0.8 to force strict physical proof in final epochs.
+    PHASE1_MAX = 0.3
+    PHASE2_MAX = 0.8
     RAMP_START = 30
-    RAMP_END = 100
+    RAMP1_END = 100
+    RAMP2_START = 300
+    RAMP2_END = 500
 
     for epoch in range(1, epochs + 1):
         if epoch <= RAMP_START:
             lambda_weight = 0.0
-        elif epoch <= RAMP_END:
-            lambda_weight = LAMBDA_MAX * (epoch - RAMP_START) / (RAMP_END - RAMP_START)
+        elif epoch <= RAMP1_END:
+            lambda_weight = PHASE1_MAX * (epoch - RAMP_START) / (RAMP1_END - RAMP_START)
+        elif epoch <= RAMP2_START:
+            lambda_weight = PHASE1_MAX
+        elif epoch <= RAMP2_END:
+            # Linear ramp from 0.3 to 0.8
+            lambda_weight = PHASE1_MAX + (PHASE2_MAX - PHASE1_MAX) * (epoch - RAMP2_START) / (RAMP2_END - RAMP2_START)
         else:
-            lambda_weight = LAMBDA_MAX
+            lambda_weight = PHASE2_MAX
 
         # Train
         model.train()
