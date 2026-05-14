@@ -107,10 +107,12 @@ def moo_run_cmd(
     features: str = typer.Option("data/processed/features.parquet", "--features"),
     targets: str = typer.Option("data/processed/targets.parquet", "--targets"),
     out: str = typer.Option("results/data/", "--out", help="Output directory for Pareto CSVs."),
+    pop: int = typer.Option(100, "--pop", help="Population size for NSGA-II."),
+    gen: int = typer.Option(200, "--gen", help="Number of generations for NSGA-II."),
 ) -> None:
-    """Extract Pareto front via HINN surrogate over all known discrete configurations."""
+    """Extract Pareto front via HINN surrogate (Discrete + Continuous NSGA-II)."""
     from moo import run_moo
-    run_moo(model, scalers, features, targets, out)
+    run_moo(model, scalers, features, targets, out, pop_size=pop, n_gen=gen)
 
 
 # ============================================================================
@@ -129,14 +131,14 @@ def plot_training_cmd(
 
 @PlotApp.command("pareto")
 def plot_pareto_cmd(
-    pareto: str = typer.Option("results/data/pareto_front.csv", "--pareto"),
-    gt_pareto: str = typer.Option("results/data/gt_pareto_front.csv", "--gt-pareto"),
-    raw: str = typer.Option("data/processed/targets.parquet", "--raw"),
+    discrete: str = typer.Option("results/data/pareto_front_discrete.csv", "--discrete"),
+    continuous: str = typer.Option("results/data/pareto_front_continuous.csv", "--continuous"),
+    gt: str = typer.Option("results/data/gt_pareto_front.csv", "--gt"),
     out: str = typer.Option("results/figs/pareto_front", "--out"),
 ) -> None:
-    """Visualize surrogate Pareto front vs. ground truth Pareto front."""
+    """Visualize triple-overlay Pareto front: GT vs Discrete vs Continuous."""
     from visualize.pareto_front import plot_pareto
-    plot_pareto(pareto, raw, out)
+    plot_pareto(discrete, continuous, gt, out)
 
 
 @PlotApp.command("monotonicity")
