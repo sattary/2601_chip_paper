@@ -160,5 +160,51 @@ def plot_comparison_cmd(
     plot_comparison(baselines, hinn, out)
 
 
+@PlotApp.command("data-distribution")
+def plot_data_dist_cmd(
+    raw: str = typer.Option("data/processed/targets.parquet", "--raw"),
+    out: str = typer.Option("results/figs/data_distribution", "--out"),
+) -> None:
+    """Plot distribution of Area and Latency targets to justify log1p scaling."""
+    from visualize.data_distribution import plot_data_distribution
+    plot_data_distribution(raw, out)
+
+
+@PlotApp.command("empirical-monotonicity")
+def plot_empirical_mono_cmd(
+    audit: str = typer.Option("results/data/monotonicity_audit.csv", "--audit"),
+    out: str = typer.Option("results/figs/empirical_monotonicity", "--out"),
+) -> None:
+    """Plot breakdown of monotonicity compliance from ground truth audit."""
+    from visualize.empirical_monotonicity import plot_empirical_monotonicity
+    plot_empirical_monotonicity(audit, out)
+
+
+@PlotApp.command("all")
+def plot_all_cmd() -> None:
+    """Generate all figures for the manuscript."""
+    import subprocess
+    print("Generating all paper plots...")
+    
+    # We call these via subprocess to avoid typer exit codes blocking execution
+    commands = [
+        "data-distribution",
+        "empirical-monotonicity",
+        "training-dynamics",
+        "comparison",
+        "pareto",
+        "monotonicity"
+    ]
+    
+    for cmd in commands:
+        print(f"-> Generating {cmd}...")
+        try:
+            subprocess.run(["python", "cli.py", "plot", cmd], check=True)
+        except subprocess.CalledProcessError:
+            print(f"   [Warning] {cmd} failed (data likely missing). Skipping.")
+            
+    print("\nDone! All available figures saved to results/figs/")
+
+
 if __name__ == "__main__":
     app()
