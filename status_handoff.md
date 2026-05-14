@@ -4,40 +4,33 @@
 Develop a Hardware-Informed Neural Network (HINN) combined with Multi-Objective Optimization (MOO) for High-Level Synthesis (HLS) design space exploration. Target: Q1 Journal publication (Expert Systems with Applications).
 
 ## Architecture (The "No Main" Rule Applies)
-- **Data Recovery:** `src/loko_map.py` — Two-pass relational recovery. Maps 154,259 configuration hashes to 17 unique hardware kernels.
-- **Data Pipeline:** `src/data_prep.py` — Stream-parses SQL dump and joins with kernel mapping. Result: **153,320 rows**, 22 core features (parameter OHE + synthesis hints), 4 targets.
-- **Modeling:** `src/model.py` — `HINN_MultiTask` (512→256→128→64, Dropout 0.1) + `hinn_loss`.
-- **Dataset:** `src/dataset.py` — `HINNDataset` for monotonicity training.
-- **LOKO Framework:** `src/train.py` — Supports `--loko <kernel_name>`. Replaces random splitting with hardware-aware zero-shot evaluation (Hold out 1 kernel for testing).
-- **Analysis:** `src/analysis/monotonicity_check.py` — Audits ground-truth monotonicity.
-- **Visualization:** `src/visualize/` — Publication-quality figures (Nature style). Fixed relative imports for Colab compatibility.
+- **Data Recovery:** `src/loko_map.py` — Recovered 17 hardware kernels and 153k data points.
+- **Data Pipeline:** `src/data_prep.py` — Fixed relational join mismatches.
+- **Modeling/Training:** `src/train.py` — Dual-stage lambda schedule (0.3 -> 0.8) over 500 epochs for phased physics regularization.
+- **MOO Engine:** `src/moo.py` — **UPGRADED**. Implements NSGA-II continuous search via `pymoo`. Discovers theoretical Pareto frontiers beyond discrete synthesis samples.
+- **Visualization:** `src/visualize/` — Nature-style figures. Fixed relative imports. Pareto plot now supports triple-overlay (GT vs Discrete vs Continuous).
 
-## Critical Achievement (Session 2026-05-14)
-**Zero-Shot Generalization Infra:** Successfully recovered the full hardware kernel metadata previously lost in the SQL parsing. We now have 17 kernels (e.g., `backprop`, `aes`, `stencil2d`) instead of a monolithic block. This enables **Leave-One-Kernel-Out (LOKO)** validation, providing a much stronger "Novelty" claim for the paper than simple random splits.
+## Critical Milestone (Session 2026-05-14)
+**Continuous Frontier Discovery:** We have successfully integrated **NSGA-II Genetic Search** over the learned HINN manifold. This allows the discovery of "Virtual Designs" that represent the theoretical optimality limit of the hardware design space. This is a core requirement for a Q1 paper to show how AI enables discovery, not just faster simulation.
 
 ## Current Status
-- **Data Prep:** **COMPLETE & EXPANDED**. 153k samples ready with kernel labels.
-- **LOKO Framework:** **COMPLETE**. Infrastructure verified; pilot run (held out `stencil2d`) achieved **R² = 0.84** in just 1 epoch on unseen hardware.
-- **Modeling/Training:** COMPLETE. Ready for GPU-scale LOKO sweep.
-- **Visualization:** COMPLETE. fixed `ModuleNotFoundError` for Colab.
+- **LOKO Framework:** Ready for zero-shot validation sweep.
+- **MOO Engine:** COMPLETE. Genetic search is operational.
+- **Visualization:** COMPLETE. Triple-overlay Pareto plotting verified.
 
-## Immediate Next Actions
-1. **Colab Execution:** Pull the latest code and run the LOKO sweep for all 17 kernels.
-2. **Comparative Analysis:** Run baselines (XGBoost/MLP) on the SAME LOKO splits to prove HINN's superior generalization.
-3. **Manuscript:** Update the "Experimental Setup" section to emphasize the 17-kernel LOKO zero-shot validation strategy.
+## Immediate Next Actions (Colab)
+1. **LOKO Sweep:** Train on 16 kernels, test on 1 (e.g., `stencil2d`) to get zero-shot R².
+2. **Continuous MOO:** Run `uv run python cli.py moo run --pop 100 --gen 200` to find the smooth Pareto front.
+3. **Figures:** Run `uv run python cli.py plot all` to generate the final manuscript figures.
 
 ## CLI Reference
 ```bash
-# Data Refresh (already done locally, but can be rerun in Colab)
-uv run python src/loko_map.py
-uv run python src/data_prep.py
+# Phased Training (500 epochs)
+uv run python cli.py train train --epochs 500 --seed 42
 
-# LOKO Training (Pilot example)
-uv run python cli.py train train --epochs 300 --loko stencil2d --seed 42
+# Continuous MOO Search
+uv run python cli.py moo run --pop 100 --gen 200
 
-# Plotting (Relative imports fixed)
-uv run python cli.py plot training-dynamics
+# Plotting with Triple-Overlay Pareto
 uv run python cli.py plot pareto
-uv run python cli.py plot monotonicity
-uv run python cli.py plot comparison
 ```
