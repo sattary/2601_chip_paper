@@ -1,0 +1,9 @@
+seed,model,split,target,r2
+42,XGBoost,test,hls_lut,0.5496889172611877
+42,XGBoost,test,hls_ff,0.6276624587352507
+42,XGBoost,test,average_latency,0.7727656667083445
+42,XGBoost,test,best_latency,0.5927797105551511
+42,VanillaMLP,test,hls_lut,0.49369973924454524
+42,VanillaMLP,test,hls_ff,0.5456259703654708
+42,VanillaMLP,test,average_latency,0.43161258352401355
+42,VanillaMLP,test,best_latency,0.07017155119721885

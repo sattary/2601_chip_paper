@@ -44,7 +44,7 @@ TARGET_COLS = ["hls_lut", "hls_ff", "average_latency", "best_latency"]
 # SHARED DATA LOADING
 # =============================================================================
 
-def _load_splits(seed: int) -> tuple[
+def _load_splits(seed: int, loko_kernel: str | None = None) -> tuple[
     pd.DataFrame, pd.DataFrame,
     pd.DataFrame, pd.DataFrame,
     pd.DataFrame, pd.DataFrame,
@@ -53,12 +53,27 @@ def _load_splits(seed: int) -> tuple[
     features_df = pd.read_parquet("data/processed/features.parquet")
     targets_df = pd.read_parquet("data/processed/targets.parquet")
 
-    X_tv, X_test, y_tv, y_test = train_test_split(
-        features_df, targets_df, test_size=0.1, random_state=seed
-    )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_tv, y_tv, test_size=1 / 9, random_state=seed
-    )
+    if loko_kernel:
+        print(f"Applying LOKO validation: leaving out kernel '{loko_kernel}'")
+        test_mask = targets_df['kernel_name'] == loko_kernel
+        X_test = features_df[test_mask]
+        y_test = targets_df[test_mask]
+        X_tv = features_df[~test_mask]
+        y_tv = targets_df[~test_mask]
+        X_train, X_val, y_train, y_val = train_test_split(X_tv, y_tv, test_size=0.1, random_state=seed)
+    else:
+        X_tv, X_test, y_tv, y_test = train_test_split(
+            features_df, targets_df, test_size=0.1, random_state=seed
+        )
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_tv, y_tv, test_size=1 / 9, random_state=seed
+        )
+    
+    # Strip metadata
+    y_train = y_train[TARGET_COLS]
+    y_val = y_val[TARGET_COLS]
+    y_test = y_test[TARGET_COLS]
+
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
@@ -120,7 +135,7 @@ def train_xgboost(
     print(f"\n[XGBoost] seed={seed}, n_estimators={n_estimators}, max_depth={max_depth}")
     set_global_seed(seed)
 
-    X_train, X_val, X_test, y_train, y_val, y_test = _load_splits(seed)
+    X_train, X_val, X_test, y_train, y_val, y_test = _load_splits(seed, loko_kernel)
     scaler_X, scaler_y_area, scaler_y_lat = _build_scalers(X_train, y_train)
 
     # XGBoost handles raw features well; we still apply log1p to targets for

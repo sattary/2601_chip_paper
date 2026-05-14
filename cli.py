@@ -64,10 +64,11 @@ def train_cmd(
     epochs: int = typer.Option(200, "--epochs", help="Number of training epochs."),
     batch_size: int = typer.Option(1024, "--batch-size", help="Batch size."),
     seed: int = typer.Option(42, "--seed", help="Global random seed. Run with multiple seeds for statistical reporting."),
+    loko: str = typer.Option(None, "--loko", help="Kernel name to leave out for LOKO validation."),
 ) -> None:
     """Train the multi-task HINN with physics-informed monotonicity regularization."""
     from train import train_hinn
-    train_hinn(epochs=epochs, batch_size=batch_size, seed=seed)
+    train_hinn(epochs=epochs, batch_size=batch_size, seed=seed, loko_kernel=loko)
 
 
 @TrainApp.command("baselines")

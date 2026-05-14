@@ -102,6 +102,7 @@ def train_hinn(
     epochs: int = 200,
     batch_size: int = 1024,
     seed: int = 42,
+    loko_kernel: str | None = None,
 ) -> None:
     """
     Train the HINN surrogate and persist weights + scalers.
@@ -117,13 +118,39 @@ def train_hinn(
     features_df = pd.read_parquet("data/processed/features.parquet")
     targets_df = pd.read_parquet("data/processed/targets.parquet")
 
-    # 80/10/10 split — test set is held out and never touched during training
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        features_df, targets_df, test_size=0.1, random_state=seed
-    )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train_val, y_train_val, test_size=1 / 9, random_state=seed
-    )
+    # Handle Data Splitting
+    if loko_kernel:
+        print(f"Applying LOKO validation: leaving out kernel '{loko_kernel}'")
+        if 'kernel_name' not in targets_df.columns:
+            raise ValueError("kernel_name not found in targets.parquet. Re-run data_prep.py.")
+            
+        test_mask = targets_df['kernel_name'] == loko_kernel
+        X_test = features_df[test_mask]
+        y_test = targets_df[test_mask]
+        
+        X_train_val = features_df[~test_mask]
+        y_train_val = targets_df[~test_mask]
+        
+        # Further split train_val into train/val
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train_val, y_train_val, test_size=0.1, random_state=seed
+        )
+    else:
+        # 80/10/10 split — test set is held out and never touched during training
+        X_train_val, X_test, y_train_val, y_test = train_test_split(
+            features_df, targets_df, test_size=0.1, random_state=seed
+        )
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train_val, y_train_val, test_size=1 / 9, random_state=seed
+        )
+        
+    # Strip metadata columns from targets (keep only numerical columns for training)
+    # Target columns must be exactly the 4 we expect
+    target_cols = ['hls_lut', 'hls_ff', 'average_latency', 'best_latency']
+    y_train = y_train[target_cols]
+    y_val = y_val[target_cols]
+    y_test = y_test[target_cols]
+
     print(f"Splits — Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
 
     # ------------------------------------------------------------------

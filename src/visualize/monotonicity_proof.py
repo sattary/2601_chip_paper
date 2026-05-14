@@ -10,7 +10,7 @@ import sys
 # Add parent directory to path to import model
 sys.path.append(str(Path(__file__).parent.parent))
 from model import HINN_MultiTask
-from style import nature_style, save_figure, SINGLE_COL
+from .style import nature_style, save_figure, SINGLE_COL
 
 def plot_monotonicity(model_path: str, scalers_dir: str, features_path: str, out_path: str):
     # Load Scalers
